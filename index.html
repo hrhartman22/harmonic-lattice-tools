@@ -1,1 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Harmonic Lattice Calculator</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- Mapbox -->
+<link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+<script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  background: #f5f5f5;
+}
+
+/* Tabs */
+.tab-container {
+  display: flex;
+  background: #222;
+  padding: 0;
+}
+.tab {
+  padding: 15px 25px;
+  color: #fff;
+  cursor: pointer;
+  font-weight: bold;
+}
+.tab.active {
+  background: #444;
+}
+.tab:hover {
+  background: #333;
+}
+
+/* Content */
+.section {
+  display: none;
+  padding: 20px;
+}
+.section.active {
+  display: block;
+}
+
+input, select {
+  width: 100%;
+  padding: 8px;
+  margin: 6px 0 12px 0;
+}
+
+button {
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+pre {
+  background: #eee;
+  padding: 15px;
+  border-radius: 6px;
+}
+</style>
+</head>
+
+<body>
+
+<!-- Tabs -->
+<div class="tab-container">
+  <div class="tab active" onclick="showSection('numerology')">Numerology</div>
+  <div class="tab" onclick="showSection('crystals')">Crystals</div>
+  <div class="tab" onclick="showSection('geocode')">Geocode & Lattice</div>
+</div>
+
+<!-- NUMEROLOGY SECTION -->
+<div id="numerology" class="section active">
+  <h2>Numerology & Zodiac Core</h2>
+
+  <label>Name:</label>
+  <input id="nameInput" type="text">
+
+  <label>Birthdate:</label>
+  <input id="birthInput" type="date">
+
+  <label>Current Year:</label>
+  <input id="yearInput" type="number" value="2026">
+
+  <label>Neurotype:</label>
+  <select id="neuroInput">
+    <option value="ADHD">ADHD</option>
+    <option value="Autism">Autism</option>
+    <option value="Neurotypical">Neurotypical</option>
+  </select>
+
+  <button onclick="calcNumerology()">Calculate</button>
+
+  <h3>Results</h3>
+  <pre id="numerologyOutput"></pre>
+</div>
+
+<!-- CRYSTALS SECTION -->
+<div id="crystals" class="section">
+  <h2>Crystal Selection Engine</h2>
+
+  <button onclick="runCrystalEngine()">Run Crystal Engine</button>
+
+  <h3>Results</h3>
+  <pre id="crystalOutput"></pre>
+</div>
+
+<!-- GEOCODE SECTION -->
+<div id="geocode" class="section">
+  <h2>Geocode & Lattice Engine</h2>
+
+  <label>Address:</label>
+  <input id="addressInput" type="text" placeholder="Enter any address">
+
+  <button onclick="runGeocode()">Geocode & Compute Lattice</button>
+
+  <h3>Results</h3>
+  <pre id="geocodeOutput"></pre>
+</div>
+
+<script>
+/* ---------------- TAB LOGIC ---------------- */
+function showSection(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+/* ---------------- GLOBAL STATE ---------------- */
+window.HLT_State = {};
+
+/* ---------------- NUMEROLOGY ENGINE ---------------- */
+function reduceToDigit(num) {
+  while (num > 9 && ![11,22,33].includes(num)) {
+    num = num.toString().split('').reduce((a,b)=>a+parseInt(b),0);
+  }
+  return num;
+}
+
+function getZodiac(date) {
+  const d = new Date(date);
+  const m = d.getUTCMonth() + 1;
+  const day = d.getUTCDate();
+
+  if ((m==3 && day>=21) || (m==4 && day<=19)) return "Aries";
+  if ((m==4 && day>=20) || (m==5 && day<=20)) return "Taurus";
+  if ((m==5 && day>=21) || (m==6 && day<=20)) return "Gemini";
+  if ((m==6 && day>=21) || (m==7 && day<=22)) return "Cancer";
+  if ((m==7 && day>=23) || (m==8 && day<=22)) return "Leo";
+  if ((m==8 && day>=23) || (m==9 && day<=22)) return "Virgo";
+  if ((m==9 && day>=23) || (m==10 && day<=22)) return "Libra";
+  if ((m==10 && day>=23) || (m==11 && day<=21)) return "Scorpio";
+  if ((m==11 && day>=22) || (m==12 && day<=21)) return "Sagittarius";
+  if ((m==12 && day>=22) || (m==1 && day<=19)) return "Capricorn";
+  if ((m==1 && day>=20) || (m==2 && day<=18)) return "Aquarius";
+  return "Pisces";
+}
+
+function zodiacMod(z) {
+  if (["Pisces","Cancer"].includes(z)) return 0.15;
+  if (["Aries","Leo"].includes(z)) return 0.10;
+  if (["Virgo","Capricorn"].includes(z)) return 0.05;
+  return 0.00;
+}
+
+function sensitivityCoefficient(neuro) {
+  if (neuro==="ADHD") return 1.38;
+  if (neuro==="Autism") return 1.42;
+  return 1.00;
+}
+
+function calcNumerology() {
+  const name = document.getElementById("nameInput").value.trim();
+  const birth = document.getElementById("birthInput").value;
+  const year = parseInt(document.getElementById("yearInput").value);
+  const neuro = document.getElementById("neuroInput").value;
+
+  if (!name || !birth) {
+    document.getElementById("numerologyOutput").textContent = "Please enter name and birthdate.";
+    return;
+  }
+
+  const digits = birth.replace(/-/g,"").split("").map(Number);
+  const sumDigits = digits.reduce((a,b)=>a+b,0);
+  const lifePath = reduceToDigit(sumDigits);
+
+  const zodiac = getZodiac(birth);
+  const zMod = zodiacMod(zodiac);
+  const sens = sensitivityCoefficient(neuro);
+
+  window.HLT_State.numerology = {
+    name,
+    birthdate: birth,
+    zodiac,
+    zodiacMod: zMod,
+    sensitivityCoefficient: sens,
+    H: sens,
+    C: sens + 0.04,
+    P: sens - 0.17,
+    lifePath,
+    year,
+    neurotype: neuro
+  };
+
+  document.getElementById("numerologyOutput").textContent =
+    JSON.stringify(window.HLT_State.numerology, null, 2);
+}
+
+/* ---------------- CRYSTAL ENGINE ---------------- */
+const crystalTable = [
+  { name: "Amethyst", X: 0.82, Y: 0.91 },
+  { name: "Rose Quartz", X: 0.77, Y: 0.88 },
+  { name: "Black Tourmaline", X: 0.93, Y: 0.74 },
+  { name: "Citrine", X: 0.69, Y: 0.95 },
+  { name: "Labradorite", X: 0.88, Y: 0.79 },
+  { name: "Selenite", X: 0.91, Y: 0.83 }
+];
+
+function runCrystalEngine() {
+  const n = window.HLT_State.numerology;
+  if (!n) {
+    document.getElementById("crystalOutput").textContent =
+      "Run Numerology first.";
+    return;
+  }
+
+  const results = crystalTable.map(c => {
+    const score = (c.X * n.H) + (c.Y * n.C) - (0.3 * n.P);
+    return { crystal: c.name, score };
+  });
+
+  results.sort((a,b)=>b.score - a.score);
+
+  window.HLT_State.crystals = results.slice(0,4);
+
+  document.getElementById("crystalOutput").textContent =
+    JSON.stringify(window.HLT_State.crystals, null, 2);
+}
+
+/* ---------------- GEOCODE + LATTICE ENGINE ---------------- */
+mapboxgl.accessToken = "pk.eyJ1IjoiaHJoYXJ0bWFuMjIiLCJhIjoiY210NnA2YXo2MjB4aTJ5cHo0cnA3Y2VzNiJ9.0xwj-LhOmdIqhInOm1NqIA";
+
+async function runGeocode() {
+  const addr = document.getElementById("addressInput").value.trim();
+  if (!addr) {
+    document.getElementById("geocodeOutput").textContent = "Enter an address.";
+    return;
+  }
+
+  const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(addr)}.json?access_token=${mapboxgl.accessToken}`;
+
+  const res = await fetch(url);
+  const data = await res.json();
+
+  if (!data.features || data.features.length === 0) {
+    document.getElementById("geocodeOutput").textContent = "No results.";
+    return;
+  }
+
+  const f = data.features[0];
+  const [lng, lat] = f.center;
+
+  const latticeValue = (lat * 0.0137) + (lng * 0.0081);
+  const corridorDensity = Math.abs(Math.sin(lat) * Math.cos(lng));
+  const consciousnessPropagation = latticeValue * corridorDensity;
+  const lunarPhase = ((lat + lng) % 29.53).toFixed(2);
+
+  window.HLT_State.geocode = {
+    address: addr,
+    lat,
+    lng,
+    latticeValue,
+    corridorDensity,
+    consciousnessPropagation,
+    lunarPhase
+  };
+
+  document.getElementById("geocodeOutput").textContent =
+    JSON.stringify(window.HLT_State.geocode, null, 2);
+}
+</script>
+
+</body>
+</html>
 
