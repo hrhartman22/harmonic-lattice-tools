@@ -20,7 +20,6 @@ body {
 .tab-container {
   display: flex;
   background: #222;
-  padding: 0;
 }
 .tab {
   padding: 15px 25px;
@@ -115,6 +114,9 @@ pre {
 
   <label>Address:</label>
   <input id="addressInput" type="text" placeholder="Enter any address">
+
+  <label>Date for Lunar Phase:</label>
+  <input id="moonDateInput" type="date">
 
   <button onclick="runGeocode()">Geocode & Compute Lattice</button>
 
@@ -246,8 +248,66 @@ function runCrystalEngine() {
 /* ---------------- GEOCODE + LATTICE ENGINE ---------------- */
 mapboxgl.accessToken = "pk.eyJ1IjoiaHJoYXJ0bWFuMjIiLCJhIjoiY210NnA2YXo2MjB4aTJ5cHo0cnA3Y2VzNiJ9.0xwj-LhOmdIqhInOm1NqIA";
 
+/* Facility Harmonic Signatures */
+const FacilityS1 = [0.82, -0.35, 0.12, 0.56, -0.68, 0.91, -0.49];
+const FacilityS2 = [0.41, 0.77, -0.93, 0.64, -0.22, -0.09, 0.87];
+
+/* Lunar Phase */
+function computeLunarPhase(dateStr) {
+  const d = new Date(dateStr);
+  const base = new Date(2000, 0, 6);
+  const days = (d - base) / (1000 * 60 * 60 * 24);
+  const phase = ((days / 29.530588853) % 1 + 1) % 1;
+  return phase;
+}
+
+function phaseName(phase) {
+  if (phase < 0.03 || phase > 0.97) return "New Moon";
+  if (phase < 0.22) return "Waxing Crescent";
+  if (phase < 0.28) return "First Quarter";
+  if (phase < 0.47) return "Waxing Gibbous";
+  if (phase < 0.53) return "Full Moon";
+  if (phase < 0.72) return "Waning Gibbous";
+  if (phase < 0.78) return "Last Quarter";
+  return "Waning Crescent";
+}
+
+/* Lattice Value */
+function computeLatticeValue(lat, lng, lunarPhase) {
+  const angles = [0,0.4,0.8,1.2,1.6,2,2.4];
+  const factor = 3 * Math.cos(lat * Math.PI/180) * Math.sin(lng * Math.PI/180);
+
+  let sum = 0;
+  for (let i = 0; i < 7; i++) {
+    const term = Math.cos(2 * Math.PI * lunarPhase + angles[i]) * factor;
+    sum += FacilityS1[i] * term;
+  }
+  return sum / 7;
+}
+
+/* Corridor Density */
+function computeCorridorDensity(lat, lng, lunarPhase) {
+  const angles = [0.15,0.55,0.95,1.35,1.75,2.15,2.55];
+  const factor = 5 * Math.cos(lat * Math.PI/180) * Math.sin(lng * Math.PI/180);
+
+  let sum = 0;
+  for (let i = 0; i < 7; i++) {
+    const term = Math.sin(2 * Math.PI * lunarPhase + angles[i]) * factor;
+    sum += FacilityS2[i] * term;
+  }
+  return sum;
+}
+
+/* Consciousness Propagation */
+function computeConsciousnessPropagation(corridorDensity, latticeValue) {
+  return corridorDensity / (1 + Math.abs(latticeValue));
+}
+
+/* Main Geocode Engine */
 async function runGeocode() {
   const addr = document.getElementById("addressInput").value.trim();
+  const moonDate = document.getElementById("moonDateInput").value || new Date().toISOString().slice(0,10);
+
   if (!addr) {
     document.getElementById("geocodeOutput").textContent = "Enter an address.";
     return;
@@ -266,10 +326,11 @@ async function runGeocode() {
   const f = data.features[0];
   const [lng, lat] = f.center;
 
-  const latticeValue = (lat * 0.0137) + (lng * 0.0081);
-  const corridorDensity = Math.abs(Math.sin(lat) * Math.cos(lng));
-  const consciousnessPropagation = latticeValue * corridorDensity;
-  const lunarPhase = ((lat + lng) % 29.53).toFixed(2);
+  const lunarPhase = computeLunarPhase(moonDate);
+  const latticeValue = computeLatticeValue(lat, lng, lunarPhase);
+  const corridorDensity = computeCorridorDensity(lat, lng, lunarPhase);
+  const consciousnessPropagation = computeConsciousnessPropagation(corridorDensity, latticeValue);
+  const lunarPhaseName = phaseName(lunarPhase);
 
   window.HLT_State.geocode = {
     address: addr,
@@ -278,7 +339,9 @@ async function runGeocode() {
     latticeValue,
     corridorDensity,
     consciousnessPropagation,
-    lunarPhase
+    lunarPhase,
+    lunarPhaseName,
+    moonDate
   };
 
   document.getElementById("geocodeOutput").textContent =
@@ -288,4 +351,3 @@ async function runGeocode() {
 
 </body>
 </html>
-
